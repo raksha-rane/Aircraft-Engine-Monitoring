@@ -1,0 +1,5 @@
+,sensor_2,sensor_2,sensor_2,sensor_2,sensor_3,sensor_3,sensor_3,sensor_3,sensor_4,sensor_4,sensor_4,sensor_4,sensor_11,sensor_11,sensor_11,sensor_11
+,mean,std,min,max,mean,std,min,max,mean,std,min,max,mean,std,min,max
+health_state,,,,,,,,,,,,,,,,
+degrading,643.48,1.27,641.23,645.29,1599.6,16.62,1567.31,1626.72,1434.82,21.19,1387.68,1457.46,48.07,0.67,46.96,49.23
+healthy,642.77,1.02,640.52,644.92,1592.88,13.73,1567.41,1618.79,1412.43,18.28,1366.29,1444.59,47.62,0.55,46.33,48.71

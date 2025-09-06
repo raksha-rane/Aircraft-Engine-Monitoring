@@ -44,18 +44,44 @@ st.markdown("""
         padding: 1rem;
         border-radius: 0.5rem;
         border-left: 4px solid #1f77b4;
+        color: #333333;
+    }
+    .metric-card h2, .metric-card h3 {
+        color: #333333 !important;
+        margin: 0.2rem 0;
     }
     .alert-card {
         background-color: #ffe6e6;
         padding: 1rem;
         border-radius: 0.5rem;
         border-left: 4px solid #ff4b4b;
+        color: #333333;
+    }
+    .alert-card h2, .alert-card h3 {
+        color: #333333 !important;
+        margin: 0.2rem 0;
     }
     .healthy-card {
         background-color: #e6ffe6;
         padding: 1rem;
         border-radius: 0.5rem;
         border-left: 4px solid #00cc00;
+        color: #333333;
+    }
+    .healthy-card h2, .healthy-card h3 {
+        color: #333333 !important;
+        margin: 0.2rem 0;
+    }
+    .degrading-card {
+        background-color: #fff8e1;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid #ff9800;
+        color: #333333;
+    }
+    .degrading-card h2, .degrading-card h3 {
+        color: #333333 !important;
+        margin: 0.2rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -154,7 +180,7 @@ def main():
     """Main dashboard function"""
     
     # Title and header
-    st.title("✈️ Aircraft Engine Monitoring Dashboard")
+    st.title("✈️ TurbineSense")
     st.markdown("Real-time monitoring and analysis of aircraft engine sensor data")
     
     # Sidebar controls
@@ -204,7 +230,7 @@ def main():
     with col2:
         degrading_count = len(latest_data[latest_data['health_state'] == 'degrading'])
         st.markdown(f"""
-        <div class="metric-card">
+        <div class="degrading-card">
             <h3>⚠️ Degrading Engines</h3>
             <h2>{degrading_count}/{len(latest_data)}</h2>
         </div>
@@ -240,7 +266,7 @@ def main():
                             'degrading': 'orange', 
                             'critical': 'red'
                         })
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_pie, width='stretch')
     
     with col2:
         avg_rul = latest_data.groupby('health_state')['remaining_useful_life'].mean()

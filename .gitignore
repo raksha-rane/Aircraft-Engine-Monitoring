@@ -48,6 +48,24 @@ venv.bak/
 ._*
 .Spotlight-V100
 .Trashes
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+reports/
+*.log
+
+# Jenkins
+jenkins/
+.jenkins/
+
+# Environment files
+.env
+.env.local
+.env.testing
+.env.staging
+.env.production
 ehthumbs.db
 Thumbs.db
 
