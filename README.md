@@ -112,6 +112,20 @@ streamlit run src/dashboard.py  # Terminal 3
 
 Based on NASA Commercial Modular Aero-Propulsion System Simulation (C-MAPSS) specifications:
 
+### Dataset Attribution
+
+This system utilizes the **NASA Turbofan Engine Degradation Simulation Dataset**, a comprehensive collection of engine sensor data from the Commercial Modular Aero-Propulsion System Simulation (C-MAPSS) program.
+
+**Dataset Source**: [NASA Turbofan Engine Degradation Simulation](https://www.kaggle.com/datasets/bishals098/nasa-turbofan-engine-degradation-simulation)  
+**Original Research**: NASA Prognostics Center of Excellence (PCoE)  
+**Publication**: A. Saxena, K. Goebel, D. Simon, and N. Eklund, "Damage propagation modeling for aircraft engine run-to-failure simulation," in the Proceedings of the 1st International Conference on Prognostics and Health Management (PHM08), 2008.
+
+The dataset consists of multivariate time series data from simulated aircraft engine degradation, including:
+- **4 different operating conditions** and **6 fault modes**
+- **21 sensor measurements** per engine cycle
+- **Train/test datasets** with known failure modes
+- **Remaining Useful Life (RUL)** labels for supervised learning
+
 ### Monitored Parameters
 
 | Category | Sensors | Description | Units |
@@ -284,6 +298,37 @@ We welcome contributions to enhance the platform's capabilities:
 - **Documentation**: Update documentation for all new features
 - **Testing**: Include unit and integration tests for new functionality
 - **Performance**: Consider performance impact and optimize accordingly
+
+## Acknowledgments
+
+### Dataset Attribution
+
+This project uses the **NASA Turbofan Engine Degradation Simulation Dataset** from the NASA Prognostics Center of Excellence (PCoE).
+
+**Citation**:
+```
+Saxena, A., Goebel, K., Simon, D., & Eklund, N. (2008). 
+Damage propagation modeling for aircraft engine run-to-failure simulation. 
+In Proceedings of the 1st International Conference on Prognostics and Health Management (PHM08).
+```
+
+**Data Source**: [Kaggle - NASA Turbofan Engine Degradation Simulation](https://www.kaggle.com/datasets/bishals098/nasa-turbofan-engine-degradation-simulation)
+
+**Original Repository**: NASA Prognostics Data Repository  
+**License**: NASA Open Data Policy
+
+We acknowledge NASA's contribution to the prognostics and health management research community through the provision of this high-quality simulation dataset, which enables advancement in predictive maintenance technologies for aviation systems.
+
+### Technology Stack
+
+Special recognition to the open-source community and the following technologies that make this system possible:
+
+- **Apache Kafka** - Real-time streaming platform
+- **PostgreSQL** - Advanced open-source database
+- **Redis** - In-memory data structure store
+- **Docker** - Containerization platform
+- **Streamlit** - Python web application framework
+- **scikit-learn** - Machine learning library
 
 ## License
 
