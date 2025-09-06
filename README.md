@@ -26,11 +26,11 @@ This system provides end-to-end real-time monitoring of aircraft engine health t
 │   Simulators    │    │   Producer   │    │   Processing    │    │   Database   │
 └─────────────────┘    └──────────────┘    └─────────────────┘    └──────────────┘
                                                      │                       │
-                       ┌──────────────┐             ▼                       │
-                       │  Streamlit   │    ┌─────────────────┐              │
-                       │  Dashboard   │◀───│     Redis       │◀─────────────┘
+                       ┌──────────────┐              ▼                       │
+                       │  Streamlit   │    ┌─────────────────┐               │
+                       │  Dashboard   │◀───│     Redis       │◀──────────── ─┘
                        └──────────────┘    │     Cache       │
-                                          └─────────────────┘
+                                           └─────────────────┘
 ```
 
 ### Technology Stack
