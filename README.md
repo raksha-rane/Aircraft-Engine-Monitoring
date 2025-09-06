@@ -330,10 +330,6 @@ Special recognition to the open-source community and the following technologies 
 - **Streamlit** - Python web application framework
 - **scikit-learn** - Machine learning library
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## Support
 
 For questions, issues, or contributions:
