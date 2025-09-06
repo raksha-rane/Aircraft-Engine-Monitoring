@@ -1,19 +1,41 @@
 #!/usr/bin/env python3
 """
-Health check script for all system components
-Usage: python scripts/health_check.py
+Health check script for aircraft engine monitoring system
 """
 
-import sys
-import os
 import json
-import requests
-import psycopg2
-import redis
-from kafka import KafkaProducer, KafkaConsumer
-from kafka.errors import KafkaError
+import os
+import sys
 import time
 from datetime import datetime
+import redis
+import psycopg2
+from kafka import KafkaProducer, KafkaConsumer
+from kafka.errors import KafkaTimeoutError
+import requests
+from urllib.parse import urlparse
+
+def check_kafka(bootstrap_servers):
+    """Check Kafka connectivity"""
+    print("🧪 Testing Kafka connection...")
+    try:
+        # Parse servers if string
+        if isinstance(bootstrap_servers, str):
+            servers = [s.strip() for s in bootstrap_servers.split(',')]
+        else:
+            servers = bootstrap_servers
+            
+        producer = KafkaProducer(
+            bootstrap_servers=servers,
+            request_timeout_ms=5000,
+            max_block_ms=5000
+        )
+        producer.close()
+        print("✅ Kafka: Connected successfully")
+        return True
+    except Exception as e:
+        print(f"❌ Kafka: {e}")
+        return False
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))

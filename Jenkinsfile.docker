@@ -1,0 +1,296 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_REGISTRY = 'your-registry.com'  // Replace with your registry
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        COMPOSE_PROJECT_NAME = "aircraft-engine-${BRANCH_NAME}"
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
+            }
+        }
+        
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build Main App') {
+                    steps {
+                        script {
+                            sh "docker build -t aircraft-engine-app:${IMAGE_TAG} ."
+                        }
+                    }
+                }
+                stage('Build Dashboard') {
+                    steps {
+                        script {
+                            sh "docker build -f Dockerfile.dashboard -t aircraft-engine-dashboard:${IMAGE_TAG} ."
+                        }
+                    }
+                }
+                stage('Build Producer') {
+                    steps {
+                        script {
+                            sh "docker build -f Dockerfile.producer -t aircraft-engine-producer:${IMAGE_TAG} ."
+                        }
+                    }
+                }
+                stage('Build Consumer') {
+                    steps {
+                        script {
+                            sh "docker build -f Dockerfile.consumer -t aircraft-engine-consumer:${IMAGE_TAG} ."
+                        }
+                    }
+                }
+                stage('Build ML Trainer') {
+                    steps {
+                        script {
+                            sh "docker build -f Dockerfile.ml -t aircraft-engine-ml:${IMAGE_TAG} ."
+                        }
+                    }
+                }
+                stage('Build Test Image') {
+                    steps {
+                        script {
+                            sh "docker build -f Dockerfile.test -t aircraft-engine-test:${IMAGE_TAG} ."
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Test') {
+            parallel {
+                stage('Unit Tests') {
+                    steps {
+                        script {
+                            sh """
+                                docker run --rm \
+                                    -v \$(pwd)/reports:/app/reports \
+                                    aircraft-engine-test:${IMAGE_TAG} \
+                                    python -m pytest tests/test_*.py -v \
+                                    --junitxml=reports/unit-tests.xml \
+                                    --cov=src \
+                                    --cov-report=xml:reports/coverage.xml \
+                                    --cov-report=html:reports/htmlcov
+                            """
+                        }
+                        publishTestResults testResultsPattern: 'reports/unit-tests.xml'
+                        publishHTML([
+                            allowMissing: false,
+                            alwaysLinkToLastBuild: true,
+                            keepAll: true,
+                            reportDir: 'reports/htmlcov',
+                            reportFiles: 'index.html',
+                            reportName: 'Coverage Report'
+                        ])
+                    }
+                }
+                
+                stage('Integration Tests') {
+                    steps {
+                        script {
+                            sh """
+                                # Start test environment
+                                docker-compose -f docker-compose.test.yml up -d
+                                
+                                # Wait for services
+                                sleep 30
+                                
+                                # Run integration tests
+                                docker-compose -f docker-compose.test.yml run --rm integration-test
+                                
+                                # Cleanup
+                                docker-compose -f docker-compose.test.yml down -v
+                            """
+                        }
+                        publishTestResults testResultsPattern: 'reports/integration-test-results.xml'
+                    }
+                }
+                
+                stage('Security Scan') {
+                    steps {
+                        script {
+                            sh """
+                                # Scan Docker images for vulnerabilities
+                                docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                                    aquasec/trivy image --format json \
+                                    --output reports/security-scan.json \
+                                    aircraft-engine-app:${IMAGE_TAG}
+                            """
+                        }
+                        archiveArtifacts artifacts: 'reports/security-scan.json', allowEmptyArchive: true
+                    }
+                }
+            }
+        }
+        
+        stage('Code Quality') {
+            parallel {
+                stage('Linting') {
+                    steps {
+                        script {
+                            sh """
+                                docker run --rm \
+                                    aircraft-engine-test:${IMAGE_TAG} \
+                                    flake8 src/ tests/ --output-file=/dev/stdout > reports/lint-report.txt || true
+                            """
+                        }
+                        archiveArtifacts artifacts: 'reports/lint-report.txt', allowEmptyArchive: true
+                    }
+                }
+                
+                stage('Code Formatting') {
+                    steps {
+                        script {
+                            sh """
+                                docker run --rm \
+                                    aircraft-engine-test:${IMAGE_TAG} \
+                                    black --check src/ tests/ || echo "Code formatting issues found"
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Push Images') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'develop'
+                    changeRequest()
+                }
+            }
+            steps {
+                script {
+                    def images = [
+                        'aircraft-engine-app',
+                        'aircraft-engine-dashboard',
+                        'aircraft-engine-producer',
+                        'aircraft-engine-consumer',
+                        'aircraft-engine-ml'
+                    ]
+                    
+                    images.each { image ->
+                        sh """
+                            docker tag ${image}:${IMAGE_TAG} ${DOCKER_REGISTRY}/${image}:${IMAGE_TAG}
+                            docker tag ${image}:${IMAGE_TAG} ${DOCKER_REGISTRY}/${image}:latest
+                            docker push ${DOCKER_REGISTRY}/${image}:${IMAGE_TAG}
+                            docker push ${DOCKER_REGISTRY}/${image}:latest
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            parallel {
+                stage('Deploy to Staging') {
+                    when {
+                        branch 'develop'
+                    }
+                    steps {
+                        script {
+                            sh """
+                                # Deploy to staging environment
+                                docker-compose -f docker-compose.yml -p staging up -d
+                                
+                                # Health check
+                                sleep 30
+                                docker run --rm --network staging_engine-monitoring \
+                                    aircraft-engine-test:${IMAGE_TAG} \
+                                    python scripts/health_check.py
+                            """
+                        }
+                    }
+                }
+                
+                stage('Deploy to Production') {
+                    when {
+                        branch 'main'
+                    }
+                    steps {
+                        input message: 'Deploy to production?', ok: 'Deploy'
+                        script {
+                            sh """
+                                # Deploy to production
+                                export POSTGRES_PASSWORD=\${POSTGRES_PROD_PASSWORD}
+                                docker-compose -f docker-compose.prod.yml up -d
+                                
+                                # Health check
+                                sleep 60
+                                docker run --rm --network aircraft-engine-main_engine-monitoring-prod \
+                                    aircraft-engine-test:${IMAGE_TAG} \
+                                    python scripts/health_check.py
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('ML Model Training') {
+            when {
+                anyOf {
+                    triggeredBy 'TimerTrigger'
+                    expression { params.TRAIN_MODELS == true }
+                }
+            }
+            steps {
+                script {
+                    sh """
+                        # Run ML training
+                        docker run --rm \
+                            --network aircraft-engine-main_engine-monitoring \
+                            -v \$(pwd)/models:/app/models \
+                            aircraft-engine-ml:${IMAGE_TAG}
+                        
+                        # Archive trained models
+                        tar -czf models-${BUILD_NUMBER}.tar.gz models/
+                    """
+                }
+                archiveArtifacts artifacts: 'models-*.tar.gz', allowEmptyArchive: true
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Cleanup
+            sh """
+                # Clean up test containers
+                docker-compose -f docker-compose.test.yml down -v || true
+                
+                # Clean up old images
+                docker image prune -f
+            """
+            
+            // Archive reports
+            archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
+        }
+        
+        success {
+            echo "✅ Pipeline completed successfully!"
+            // Send success notification
+        }
+        
+        failure {
+            echo "❌ Pipeline failed!"
+            // Send failure notification
+        }
+        
+        unstable {
+            echo "⚠️ Pipeline completed with warnings!"
+            // Send warning notification
+        }
+    }
+}

@@ -54,6 +54,14 @@ format:
 	@echo "Code formatting complete"
 
 # Docker operations
+docker-build:
+	docker build -t aircraft-engine-app .
+	docker build -f Dockerfile.dashboard -t aircraft-engine-dashboard .
+	docker build -f Dockerfile.producer -t aircraft-engine-producer .
+	docker build -f Dockerfile.consumer -t aircraft-engine-consumer .
+	docker build -f Dockerfile.ml -t aircraft-engine-ml .
+	docker build -f Dockerfile.test -t aircraft-engine-test .
+
 docker-up:
 	docker-compose up -d
 	@echo "Waiting for services to start..."
@@ -67,9 +75,21 @@ docker-test:
 	docker-compose -f docker-compose.test.yml up -d
 	@echo "Test environment started"
 
+docker-test-run:
+	docker-compose -f docker-compose.test.yml up --abort-on-container-exit
+	docker-compose -f docker-compose.test.yml down -v
+
+docker-prod:
+	docker-compose -f docker-compose.prod.yml up -d
+
 docker-clean:
 	docker-compose down -v
+	docker-compose -f docker-compose.test.yml down -v || true
+	docker-compose -f docker-compose.prod.yml down -v || true
 	docker system prune -f
+
+docker-logs:
+	docker-compose logs -f
 
 # Health checks
 health-check:

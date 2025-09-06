@@ -9,16 +9,23 @@ import pandas as pd
 from datetime import datetime
 import sys
 import os
+from config import get_config
+
+config = get_config()
 
 def connect_to_database():
-    """Connect to PostgreSQL database"""
+    """Connect to PostgreSQL database using config"""
     try:
+        # Parse DATABASE_URL for connection parameters
+        from urllib.parse import urlparse
+        parsed = urlparse(config.DATABASE_URL)
+        
         conn = psycopg2.connect(
-            host='localhost',
-            port=5433,
-            dbname='engine_monitoring',
-            user='postgres',
-            password='password'
+            host=parsed.hostname,
+            port=parsed.port,
+            dbname=parsed.path[1:],  # Remove leading /
+            user=parsed.username,
+            password=parsed.password
         )
         return conn
     except Exception as e:

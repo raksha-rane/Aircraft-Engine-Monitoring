@@ -1,26 +1,31 @@
 # Docker Compose for Testing Environment
 services:
-  zookeeper:
+  # Infrastructure Services (Test versions)
+  zookeeper-test:
     image: confluentinc/cp-zookeeper:latest
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - test-network
 
-  kafka:
+  kafka-test:
     image: confluentinc/cp-kafka:7.4.0
     depends_on:
-      - zookeeper
+      - zookeeper-test
     ports:
-      - "9092:9092"
+      - "9093:9092"  # Different port for testing
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-test:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-test:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    networks:
+      - test-network
 
-  postgres:
+  postgres-test:
     image: postgres:13
     environment:
       POSTGRES_DB: engine_monitoring_test
@@ -28,16 +33,69 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5434:5432"  # Different port for testing
-    volumes:
-      - postgres_test_data:/var/lib/postgresql/data
+    networks:
+      - test-network
     tmpfs:
       - /var/lib/postgresql/data  # Use tmpfs for faster tests
 
-  redis:
+  redis-test:
     image: redis:alpine
     ports:
       - "6380:6379"  # Different port for testing
     command: redis-server --appendonly no  # Disable persistence for tests
+    networks:
+      - test-network
 
-volumes:
-  postgres_test_data:
+  # Test Runner Service
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      - kafka-test
+      - postgres-test
+      - redis-test
+    environment:
+      - FLASK_ENV=testing
+      - DATABASE_URL=postgresql://postgres:password@postgres-test:5432/engine_monitoring_test
+      - REDIS_HOST=redis-test
+      - KAFKA_BOOTSTRAP_SERVERS=kafka-test:9092
+    volumes:
+      - ./reports:/app/reports  # Mount reports directory
+    networks:
+      - test-network
+    command: >
+      sh -c "
+        echo 'Waiting for services to be ready...' &&
+        sleep 10 &&
+        echo 'Running tests...' &&
+        python -m pytest tests/ -v --junitxml=reports/test-results.xml --cov=src --cov-report=html --cov-report=xml
+      "
+
+  # Integration Test Service
+  integration-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      - kafka-test
+      - postgres-test
+      - redis-test
+    environment:
+      - FLASK_ENV=testing
+      - DATABASE_URL=postgresql://postgres:password@postgres-test:5432/engine_monitoring_test
+      - REDIS_HOST=redis-test
+      - KAFKA_BOOTSTRAP_SERVERS=kafka-test:9092
+    networks:
+      - test-network
+    command: >
+      sh -c "
+        echo 'Waiting for services to be ready...' &&
+        sleep 15 &&
+        echo 'Running integration tests...' &&
+        python -m pytest tests/test_integration.py -v --junitxml=reports/integration-test-results.xml
+      "
+
+networks:
+  test-network:
+    driver: bridge

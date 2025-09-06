@@ -1,9 +1,14 @@
+version: '3.8'
+
 services:
+  # Infrastructure Services
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - engine-monitoring-network
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
@@ -14,10 +19,17 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    networks:
+      - engine-monitoring-network
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   postgres:
     image: postgres:13
@@ -29,11 +41,106 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - engine-monitoring-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
+    networks:
+      - engine-monitoring-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Application Services
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    ports:
+      - "8501:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - FLASK_ENV=staging
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/engine_monitoring
+      - REDIS_HOST=redis
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=engine-sensors
+    networks:
+      - engine-monitoring-network
+    restart: unless-stopped
+
+  producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.producer
+    depends_on:
+      - kafka
+      - postgres
+      - redis
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=engine-sensors
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/engine_monitoring
+      - REDIS_HOST=redis
+      - FLASK_ENV=staging
+    volumes:
+      - ./models:/app/models:ro
+    networks:
+      - engine-monitoring-network
+
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.consumer
+    depends_on:
+      - kafka
+      - postgres
+      - redis
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=engine-sensors
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/engine_monitoring
+      - REDIS_HOST=redis
+      - FLASK_ENV=staging
+    volumes:
+      - ./models:/app/models:ro
+    networks:
+      - engine-monitoring-network
+
+  ml-trainer:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml
+    depends_on:
+      - postgres
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/engine_monitoring
+    volumes:
+      - ml_models:/app/models
+    networks:
+      - engine-monitoring-network
+    profiles:
+      - training  # Only start when specifically requested
+
+networks:
+  engine-monitoring-network:
+    driver: bridge
 
 volumes:
   postgres_data:
+  ml_models:

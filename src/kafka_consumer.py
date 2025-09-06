@@ -5,6 +5,7 @@ Consumes streaming sensor data and stores in PostgreSQL
 
 import json
 import logging
+import os
 from datetime import datetime
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
@@ -12,6 +13,13 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import redis
 from typing import Dict, List
+from urllib.parse import urlparse
+
+# Import configuration
+from config import get_config
+
+# Get configuration
+config = get_config()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -20,14 +28,18 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     """Manages PostgreSQL database operations"""
     
-    def __init__(self, host='localhost', port=5433, dbname='engine_monitoring', 
-                 user='postgres', password='password'):
+    def __init__(self, database_url=None):
+        if database_url is None:
+            database_url = config.DATABASE_URL
+            
+        # Parse database URL
+        parsed = urlparse(database_url)
         self.connection_params = {
-            'host': host,
-            'port': port,
-            'dbname': dbname,
-            'user': user,
-            'password': password
+            'host': parsed.hostname,
+            'port': parsed.port or 5432,
+            'dbname': parsed.path[1:],  # Remove leading slash
+            'user': parsed.username,
+            'password': parsed.password
         }
         self.conn = None
         self._connect()
@@ -196,7 +208,11 @@ class DatabaseManager:
 class RedisCache:
     """Redis cache for recent data and alerts"""
     
-    def __init__(self, host='localhost', port=6379, db=0):
+    def __init__(self, host=None, port=None, db=0):
+        if host is None:
+            host = config.REDIS_HOST
+        if port is None:
+            port = config.REDIS_PORT
         self.redis_client = redis.Redis(host=host, port=port, db=db, decode_responses=True)
         self._test_connection()
     
@@ -237,11 +253,18 @@ class RedisCache:
 class EngineSensorConsumer:
     """Kafka consumer that processes engine sensor data"""
     
-    def __init__(self, bootstrap_servers=['localhost:9092'], topic='engine-sensors'):
-        self.topic = topic
+    def __init__(self, bootstrap_servers=None, topic=None):
+        self.topic = topic or config.KAFKA_TOPIC
         self.consumer = None
         self.db_manager = DatabaseManager()
         self.cache = RedisCache()
+        
+        # Parse bootstrap servers from config
+        if bootstrap_servers is None:
+            bootstrap_servers = config.KAFKA_BOOTSTRAP_SERVERS
+        if isinstance(bootstrap_servers, str):
+            bootstrap_servers = [server.strip() for server in bootstrap_servers.split(',')]
+        
         self._connect_to_kafka(bootstrap_servers)
     
     def _connect_to_kafka(self, bootstrap_servers):

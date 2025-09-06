@@ -14,6 +14,10 @@ from ml_models import EngineHealthPredictor
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import redis
+from config import get_config
+
+config = get_config()
+import redis
 import json
 import time
 
@@ -32,18 +36,30 @@ class RealTimeMLInference:
     def _connect_services(self):
         """Connect to database and Redis"""
         try:
-            # PostgreSQL connection
+            # PostgreSQL connection using config
+            db_url = config.DATABASE_URL
+            # Parse DATABASE_URL for connection parameters
+            from urllib.parse import urlparse
+            parsed = urlparse(db_url)
+            
             self.db_conn = psycopg2.connect(
-                host='localhost',
-                port=5433,
-                dbname='engine_monitoring',
-                user='postgres',
-                password='password'
+                host=parsed.hostname,
+                port=parsed.port,
+                dbname=parsed.path[1:],  # Remove leading /
+                user=parsed.username,
+                password=parsed.password
             )
             print("✅ Connected to PostgreSQL")
             
-            # Redis connection
-            self.redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+            # Redis connection using config
+            redis_password = getattr(config, 'REDIS_PASSWORD', None)
+            self.redis_client = redis.Redis(
+                host=config.REDIS_HOST, 
+                port=config.REDIS_PORT, 
+                password=redis_password,
+                db=0, 
+                decode_responses=True
+            )
             self.redis_client.ping()
             print("✅ Connected to Redis")
             

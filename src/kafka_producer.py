@@ -5,13 +5,18 @@ Streams real-time sensor data from engine simulator to Kafka
 
 import json
 import time
+import os
 from datetime import datetime
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 import logging
 
-# Import your simulator
+# Import your simulator and config
 from data_simulator import FleetSimulator
+from config import get_config
+
+# Get configuration
+config = get_config()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -20,10 +25,22 @@ logger = logging.getLogger(__name__)
 class EngineSensorProducer:
     """Kafka producer for streaming engine sensor data"""
     
-    def __init__(self, bootstrap_servers=['localhost:9092'], topic='engine-sensors'):
-        self.topic = topic
+    def __init__(self, bootstrap_servers=None, topic=None):
+        self.topic = topic or config.KAFKA_TOPIC
         self.producer = None
+        # Parse bootstrap servers from config
+        if bootstrap_servers is None:
+            bootstrap_servers = config.KAFKA_BOOTSTRAP_SERVERS
+        if isinstance(bootstrap_servers, str):
+            bootstrap_servers = [server.strip() for server in bootstrap_servers.split(',')]
         self.bootstrap_servers = bootstrap_servers
+        
+        # Debug logging
+        logger.info(f"🔧 Config type: {config.__class__.__name__}")
+        logger.info(f"🔧 Bootstrap servers from config: {config.KAFKA_BOOTSTRAP_SERVERS}")
+        logger.info(f"🔧 Final bootstrap servers: {self.bootstrap_servers}")
+        logger.info(f"🔧 Topic: {self.topic}")
+        
         self._connect_to_kafka()
     
     def _connect_to_kafka(self):
